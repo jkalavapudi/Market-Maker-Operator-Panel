@@ -41,12 +41,11 @@ def market_card(market: Market) -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.span(
-                        market["ticker"],
+                        market["description"],
                         class_name="font-semibold text-gray-800 hover:underline",
                     ),
                     rx.el.p(
-                        market["description"],
-                        class_name="text-xs text-gray-500 truncate",
+                        market["ticker"], class_name="text-xs text-gray-500 truncate"
                     ),
                     class_name="flex flex-col",
                 ),

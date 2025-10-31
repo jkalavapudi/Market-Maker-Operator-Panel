@@ -7,7 +7,7 @@ import logging
 async def get_markets(
     api_key: str,
     status: str = "open",
-    limit: int = 20,
+    limit: int = 500,
     series_ticker: str | None = None,
 ) -> dict:
     """Fetches markets from the Kalshi API."""
