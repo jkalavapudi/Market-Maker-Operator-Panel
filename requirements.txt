@@ -4,3 +4,4 @@ PyGithub
 cryptography
 requests
 httpx
+websockets

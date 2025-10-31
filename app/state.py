@@ -10,9 +10,9 @@ class BotState(rx.State):
     connection_status: dict[
         str, Literal["connected", "unauthorized", "failed", "disconnected"]
     ] = {"kalshi": "disconnected", "polymarket": "disconnected"}
-    kalshi_api_key: str = ""
-    kalshi_secret_key: str = ""
-    polymarket_api_key: str = ""
+    kalshi_api_key: str = rx.LocalStorage("", name="kalshi_api_key")
+    kalshi_secret_key: str = rx.LocalStorage("", name="kalshi_secret_key")
+    polymarket_api_key: str = rx.LocalStorage("", name="polymarket_api_key")
     markets: dict[str, Market] = {}
     active_market_id: str | None = None
     log_messages: list[dict[str, str]] = []
@@ -137,13 +137,13 @@ class BotState(rx.State):
     @rx.event
     def start_bot(self):
         self.is_bot_running = True
-        self._add_log("info", "Bot started. Initializing market data polling.")
-        return BotState.poll_market_data
+        self._add_log("info", "Bot started. Initializing real-time data feeds.")
+        return BotState.run_websocket_client
 
     @rx.event
     def stop_bot(self):
         self.is_bot_running = False
-        self._add_log("warning", "Bot polling stopped.")
+        self._add_log("warning", "Bot stopped. Disconnecting from real-time feeds.")
 
     def _add_log(self, level: str, message: str):
         """Adds a message to the log."""
@@ -162,7 +162,7 @@ class BotState(rx.State):
 
         async with self:
             api_key = self.kalshi_api_key
-        response_data = await get_markets(api_key)
+        response_data = await get_markets(api_key, status="open", limit=50)
         async with self:
             if "error" in response_data:
                 self._add_log("error", f"API Error: {response_data['error']}")
@@ -210,3 +210,21 @@ class BotState(rx.State):
                     )
             if not self.active_market_id and self.markets:
                 self.active_market_id = list(self.markets.keys())[0]
+
+    @rx.event(background=True)
+    async def run_websocket_client(self):
+        from app.websocket_client import KalshiWebsocketClient
+
+        async with self:
+            if not self.kalshi_api_key:
+                self._add_log("error", "Cannot start bot: Kalshi API key is not set.")
+                self.is_bot_running = False
+                return
+            market_tickers = list(self.markets.keys())
+            if not market_tickers:
+                self._add_log("warning", "No markets to monitor. Stopping bot.")
+                self.is_bot_running = False
+                return
+            client = KalshiWebsocketClient(self.kalshi_api_key, market_tickers)
+            yield
+        await client.connect(self)

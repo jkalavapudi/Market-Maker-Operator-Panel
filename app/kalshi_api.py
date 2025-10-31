@@ -4,10 +4,17 @@ import os
 import logging
 
 
-async def get_markets(api_key: str, status: str = "open", limit: int = 20) -> dict:
+async def get_markets(
+    api_key: str,
+    status: str = "open",
+    limit: int = 20,
+    series_ticker: str | None = None,
+) -> dict:
     """Fetches markets from the Kalshi API."""
     base_url = "https://demo-api.kalshi.co"
     path = f"/trade-api/v2/markets?status={status}&limit={limit}"
+    if series_ticker:
+        path += f"&series_ticker={series_ticker}"
     headers = {}
     if api_key and api_key.strip():
         headers["Authorization"] = f"Bearer {api_key}"
