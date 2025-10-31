@@ -17,11 +17,20 @@ class BotState(rx.State):
     active_market_id: str | None = None
     log_messages: list[dict[str, str]] = []
     show_kill_switch_dialog: bool = False
+    search_query: str = ""
 
     @rx.var
     def active_markets(self) -> list[Market]:
-        """Returns a list of all active markets."""
-        return list(self.markets.values())
+        """Returns a list of all active markets, filtered by search query."""
+        if not self.search_query:
+            return list(self.markets.values())
+        search_lower = self.search_query.lower()
+        return [
+            market
+            for market in self.markets.values()
+            if search_lower in market["ticker"].lower()
+            or search_lower in market["description"].lower()
+        ]
 
     @rx.var
     def selected_market(self) -> Market | None:
