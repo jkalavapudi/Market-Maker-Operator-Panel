@@ -7,8 +7,9 @@ from app.components.log_viewer import log_viewer
 from app.components.kill_switch_dialog import kill_switch_dialog
 
 
-def status_badge(status: rx.Var[str]) -> rx.Component:
+def status_badge(label: str, status: rx.Var[str]) -> rx.Component:
     return rx.el.div(
+        rx.el.span(f"{label}:", class_name="text-sm font-medium text-gray-500"),
         rx.el.div(
             class_name=rx.match(
                 status,
@@ -24,19 +25,43 @@ def status_badge(status: rx.Var[str]) -> rx.Component:
     )
 
 
+def data_source_toggle() -> rx.Component:
+    return rx.el.div(
+        rx.el.span("Mock Data", class_name="text-sm font-medium text-gray-600"),
+        rx.el.button(
+            rx.el.span(
+                class_name=rx.cond(
+                    BotState.use_mock_data,
+                    "block w-4 h-4 rounded-full bg-white transform translate-x-5 transition-transform",
+                    "block w-4 h-4 rounded-full bg-white transform translate-x-1 transition-transform",
+                )
+            ),
+            on_click=BotState.toggle_data_source,
+            class_name=rx.cond(
+                BotState.use_mock_data,
+                "relative inline-flex items-center h-6 rounded-full w-10 transition-colors bg-blue-600",
+                "relative inline-flex items-center h-6 rounded-full w-10 transition-colors bg-gray-300",
+            ),
+        ),
+        rx.el.span("Live API", class_name="text-sm font-medium text-gray-600"),
+        class_name="flex items-center gap-2",
+    )
+
+
 def dashboard_header() -> rx.Component:
     return rx.el.header(
         rx.el.div(
             rx.el.div(
                 rx.el.h1("Dashboard", class_name="text-2xl font-bold text-gray-900"),
-                rx.el.div(
-                    status_badge(BotState.connection_status["kalshi"]),
-                    status_badge(BotState.connection_status["polymarket"]),
-                    class_name="flex items-center gap-6",
-                ),
+                rx.el.div(data_source_toggle(), class_name="flex items-center gap-4"),
                 class_name="flex items-center justify-between w-full",
             ),
-            class_name="flex items-center gap-4",
+            rx.el.div(
+                status_badge("Kalshi", BotState.connection_status["kalshi"]),
+                status_badge("Polymarket", BotState.connection_status["polymarket"]),
+                class_name="flex items-center gap-6 mt-2",
+            ),
+            class_name="flex flex-col items-start",
         ),
         rx.el.div(
             rx.el.button(
@@ -78,7 +103,7 @@ def dashboard_content() -> rx.Component:
             log_viewer(),
             class_name="flex flex-col gap-6 p-4 md:p-6",
         ),
-        class_name="ml-64 flex flex-col h-screen font-['Inter'] bg-gray-50",
+        class_name="ml-64 flex flex-col h-screen font-['Lato'] bg-gray-50",
     )
 
 
@@ -86,5 +111,5 @@ def dashboard_page() -> rx.Component:
     return rx.el.div(
         sidebar(),
         dashboard_content(),
-        class_name="min-h-screen w-full bg-gray-50 font-['Inter']",
+        class_name="min-h-screen w-full bg-gray-50 font-['Lato']",
     )

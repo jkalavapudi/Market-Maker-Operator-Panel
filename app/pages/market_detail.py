@@ -194,5 +194,5 @@ def market_detail_page() -> rx.Component:
     return rx.el.div(
         sidebar(),
         market_detail_content(),
-        class_name="min-h-screen w-full bg-gray-50 font-['Inter']",
+        class_name="min-h-screen w-full bg-gray-50 font-['Lato']",
     )

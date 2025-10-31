@@ -6,6 +6,7 @@ from app.models import Market, OrderBookLevel, TradeFill, StrategyParams
 
 class BotState(rx.State):
     is_bot_running: bool = False
+    use_mock_data: bool = True
     global_kill_switch_active: bool = False
     connection_status: dict[
         str, Literal["connected", "unauthorized", "failed", "disconnected"]
@@ -29,6 +30,34 @@ class BotState(rx.State):
         if self.active_market_id and self.active_market_id in self.markets:
             return self.markets[self.active_market_id]
         return None
+
+    @rx.event
+    def toggle_data_source(self):
+        self.use_mock_data = not self.use_mock_data
+        if not self.use_mock_data and (
+            not self.kalshi_api_key or not self.kalshi_secret_key
+        ):
+            self.use_mock_data = True
+            rx.toast.error(
+                "Kalshi API credentials are not set. Cannot switch to live data.",
+                duration=5000,
+            )
+            return
+        status = "mock data" if self.use_mock_data else "live API"
+        self._add_log("info", f"Data source switched to {status}.")
+
+    @rx.event
+    def save_credentials(self):
+        self._add_log("info", "API credentials saved.")
+        rx.toast.success("Credentials saved!", duration=3000)
+        if self.kalshi_api_key and self.kalshi_secret_key:
+            self.connection_status["kalshi"] = "connected"
+        else:
+            self.connection_status["kalshi"] = "disconnected"
+        if self.polymarket_api_key:
+            self.connection_status["polymarket"] = "connected"
+        else:
+            self.connection_status["polymarket"] = "disconnected"
 
     @rx.event
     def toggle_kill_switch_dialog(self):
@@ -102,11 +131,16 @@ class BotState(rx.State):
     async def poll_market_data(self):
         """Periodically polls the bot controller for fresh market data."""
         async with self:
-            if not self.markets:
-                self._initialize_mock_data()
+            if self.use_mock_data:
+                if not self.markets:
+                    self._initialize_mock_data()
+            else:
+                self._add_log("warning", "Live API polling not implemented.")
+                self.is_bot_running = False
+                return
         await asyncio.sleep(2)
         async with self:
-            if "BIDEN" in self.markets:
+            if self.use_mock_data and "BIDEN" in self.markets:
                 market = self.markets["BIDEN"]
                 market["best_bid"] = (
                     round(market["best_bid"] + 0.01, 2)
