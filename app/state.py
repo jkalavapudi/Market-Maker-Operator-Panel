@@ -162,7 +162,9 @@ class BotState(rx.State):
 
         async with self:
             api_key = self.kalshi_api_key
-        response_data = await get_markets(api_key, status="open", limit=50)
+        response_data = await get_markets(
+            api_key, status="open", limit=100, series_ticker="NCAAB"
+        )
         async with self:
             if "error" in response_data:
                 self._add_log("error", f"API Error: {response_data['error']}")
