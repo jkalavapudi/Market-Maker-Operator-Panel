@@ -37,7 +37,7 @@ def quote_display(side: str, price: rx.Var, size: rx.Var) -> rx.Component:
 
 def market_card(market: Market) -> rx.Component:
     return rx.el.div(
-        rx.el.a(
+        rx.link(
             rx.el.div(
                 rx.el.div(
                     rx.el.span(

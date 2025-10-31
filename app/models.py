@@ -24,6 +24,11 @@ class StrategyParams(TypedDict):
     enabled: bool
 
 
+class PriceDataPoint(TypedDict):
+    time: str
+    price: float
+
+
 class Market(TypedDict):
     market_id: str
     ticker: str
@@ -37,6 +42,8 @@ class Market(TypedDict):
     inventory: int
     unrealized_pnl: float
     quoting_active: bool
+    total_volume: int
+    price_history: list[PriceDataPoint]
     strategy_params: StrategyParams
     order_book: list[OrderBookLevel]
     recent_trades: list[TradeFill]

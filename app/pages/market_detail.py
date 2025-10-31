@@ -154,39 +154,112 @@ def strategy_params_view() -> rx.Component:
     )
 
 
+def time_range_button(label: str) -> rx.Component:
+    is_active = BotState.chart_time_range == label
+    return rx.el.button(
+        label,
+        on_click=lambda: BotState.set_chart_time_range(label),
+        class_name=rx.cond(
+            is_active,
+            "px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded-md",
+            "px-3 py-1 text-sm font-medium text-gray-600 bg-gray-200 rounded-md hover:bg-gray-300",
+        ),
+    )
+
+
+def price_history_chart() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h3("Price History", class_name="text-lg font-semibold text-gray-800"),
+            rx.el.div(
+                time_range_button("1D"),
+                time_range_button("1W"),
+                time_range_button("1M"),
+                time_range_button("ALL"),
+                class_name="flex items-center gap-2",
+            ),
+            class_name="flex justify-between items-center mb-2",
+        ),
+        rx.el.div(
+            rx.recharts.line_chart(
+                rx.recharts.cartesian_grid(
+                    stroke_dasharray="3 3", horizontal=True, vertical=False
+                ),
+                rx.recharts.graphing_tooltip(),
+                rx.recharts.x_axis(data_key="time"),
+                rx.recharts.y_axis(domain=[0, 1]),
+                rx.recharts.line(
+                    type_="monotone",
+                    data_key="price",
+                    stroke="#8884d8",
+                    active_dot=True,
+                    dot=False,
+                ),
+                data=BotState.price_history_for_range,
+                height=300,
+                margin={"top": 5, "right": 20, "left": -10, "bottom": 5},
+            ),
+            class_name="bg-white border rounded-lg shadow-sm p-4 h-96",
+        ),
+    )
+
+
 def market_detail_content() -> rx.Component:
     return rx.el.main(
-        rx.el.div(
-            rx.cond(
-                BotState.selected_market,
-                rx.el.div(
-                    rx.el.header(
+        rx.cond(
+            BotState.selected_market,
+            rx.el.div(
+                rx.el.header(
+                    rx.el.div(
                         rx.el.h1(
-                            BotState.selected_market["ticker"],
+                            BotState.selected_market["description"],
                             class_name="text-2xl font-bold text-gray-900",
                         ),
                         rx.el.p(
-                            BotState.selected_market["description"],
-                            class_name="text-sm text-gray-600 mt-1",
+                            BotState.selected_market["ticker"],
+                            class_name="text-sm text-gray-500 mt-1 font-mono",
                         ),
-                        class_name="p-4 border-b bg-white",
                     ),
                     rx.el.div(
+                        rx.el.span("Total Volume", class_name="text-sm text-gray-500"),
                         rx.el.div(
-                            order_book_view(),
-                            recent_trades_view(),
-                            class_name="grid grid-cols-1 lg:grid-cols-2 gap-6",
+                            rx.el.span("$", class_name="text-2xl font-semibold"),
+                            rx.el.span(
+                                BotState.selected_market["total_volume"].to_string(),
+                                class_name="text-2xl font-semibold",
+                            ),
+                            class_name="flex items-baseline text-gray-800",
                         ),
-                        strategy_params_view(),
-                        class_name="p-4 md:p-6 grid grid-cols-1 xl:grid-cols-3 gap-6",
+                        class_name="text-right",
                     ),
+                    class_name="p-4 border-b bg-white flex justify-between items-center",
                 ),
+                rx.el.div(price_history_chart(), class_name="p-4 md:p-6"),
                 rx.el.div(
-                    rx.el.p("Select a market to view details."), class_name="p-6"
+                    rx.el.div(
+                        order_book_view(),
+                        recent_trades_view(),
+                        class_name="grid grid-cols-1 lg:grid-cols-2 gap-6",
+                    ),
+                    strategy_params_view(),
+                    class_name="p-4 md:p-6 grid grid-cols-1 xl:grid-cols-3 gap-6",
                 ),
-            )
+                class_name="w-full",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.icon(
+                        "loader-circle", class_name="h-8 w-8 animate-spin text-blue-600"
+                    ),
+                    rx.el.p(
+                        "Loading market data...",
+                        class_name="text-center text-gray-500 font-medium mt-4",
+                    ),
+                    class_name="flex flex-col items-center justify-center h-64 bg-gray-100 rounded-lg",
+                )
+            ),
         ),
-        class_name="ml-64 flex flex-col h-screen bg-gray-50",
+        class_name="ml-64 flex flex-col items-center h-screen bg-gray-50 font-['Lato']",
     )
 
 

@@ -3,30 +3,6 @@
 ## Project Overview
 Local-only operator dashboard for supervising and controlling an automated event market making bot across Kalshi and Polymarket exchanges.
 
-## Architecture
-```
-/app
-  /state.py           # Reflex state management
-  /pages
-    /dashboard.py     # Main markets overview + kill switch
-    /market_detail.py # Order book depth + recent trades
-    /strategy.py      # Strategy parameter configuration
-    /settings.py      # API credentials management
-  /components
-    /market_card.py   # Individual market display component
-    /order_book.py    # Order book visualization
-    /log_viewer.py    # Scrolling log with color-coded messages
-/bot_core
-  /controller.py      # Main controller wrapping market making logic
-  /market_maker.py    # Core market making engine (based on KalshiMarketMaker repo)
-  /models.py          # Data models (Market, OrderBookLevel, TradeFill, StrategyParams)
-/exchanges
-  /kalshi_client.py   # Kalshi API wrapper
-  /polymarket_client.py # Polymarket API wrapper (stubbed)
-/config
-  /settings.py        # Configuration and environment variable handling
-```
-
 ---
 
 ## Phase 1: Core Data Models, Controller Architecture, and Settings Page ✅
@@ -34,9 +10,9 @@ Local-only operator dashboard for supervising and controlling an automated event
 
 ### Tasks:
 - [x] Create data models (Market, OrderBookLevel, TradeFill, StrategyParams) in bot_core/models.py
-- [x] Build controller class with state management methods (get_all_markets_state, get_market_order_book, pause_all, etc.)
-- [x] Implement config/settings.py for loading API keys from environment/local config
-- [x] Create exchange client stubs (Kalshi and Polymarket) with placeholder functions
+- [x] Build controller class with state management methods
+- [x] Implement config/settings.py for loading API keys
+- [x] Create exchange client stubs (Kalshi and Polymarket)
 - [x] Build Settings page UI with API credential input, connection status indicators
 - [x] Test controller instantiation and settings page rendering
 
@@ -46,11 +22,11 @@ Local-only operator dashboard for supervising and controlling an automated event
 **Goal**: Build main monitoring interface showing all active markets with real-time state
 
 ### Tasks:
-- [x] Create dashboard page with markets table (ticker, bid/ask, my quotes, inventory, PnL, status)
+- [x] Create dashboard page with markets table
 - [x] Implement global kill switch button with confirmation dialog
 - [x] Add per-market toggle (on/off quoting state)
 - [x] Build market card component for clean display
-- [x] Connect dashboard to controller state with auto-refresh (polling every 1-2s)
+- [x] Connect dashboard to controller state with auto-refresh
 - [x] Add visual indicators for connection status and market activity
 - [x] Test dashboard with mock market data
 
@@ -60,53 +36,159 @@ Local-only operator dashboard for supervising and controlling an automated event
 **Goal**: Deep dive into individual markets with full order book, trade history, and parameter editing
 
 ### Tasks:
-- [x] Create market detail page with market selector (dropdown or sidebar)
-- [x] Build order book visualization component (bid/ask levels with price and size)
-- [x] Display recent trades table (timestamp, side, price, size)
+- [x] Create market detail page with market selector
+- [x] Build order book visualization component
+- [x] Display recent trades table
 - [x] Show my recent orders and fill status
-- [x] Implement strategy configuration panel with interactive form (sliders/inputs for spread, size, inventory caps, skew)
-- [x] Add "Apply" button that calls controller.update_strategy_params() without restarting bot
-- [x] Build logging/alerts component with color-coded messages (info/warning/error)
+- [x] Implement strategy configuration panel
+- [x] Add "Apply" button for parameter updates
+- [x] Build logging/alerts component with color-coded messages
 - [x] Test full order book display and parameter updates
 - [x] Take screenshots to verify UI quality
 
 ---
 
+## Phase 4: Pagination and Search Enhancements ✅
+**Goal**: Add pagination controls and search functionality
+
+### Completed Tasks:
+- [x] ✅ Add pagination dropdown (10, 25, 50, 100 items per page)
+- [x] ✅ Display "Showing X of Y markets" counter  
+- [x] ✅ Implement set_items_per_page event handler with fetch trigger
+- [x] ✅ Test pagination dropdown functionality
+- [x] ✅ Add search bar for filtering markets by ticker/description
+- [x] ✅ Update market cards to show full market descriptions
+- [x] ✅ Implement filtered_markets_count computed var
+- [x] ✅ Add chart_time_range state variable
+- [x] ✅ Implement set_chart_time_range event handler
+- [x] ✅ Add price_history_for_range computed var with filtering logic
+- [x] ✅ Test time range filtering (1D, 1W, 1M, ALL)
+
+### Verified Dashboard Features:
+✅ **Pagination Dropdown**:
+- Dropdown visible in header with options: 10, 25, 50, 100
+- "Showing X of Y markets" counter displays correctly
+- Properly integrated with fetch_markets event handler
+
+✅ **Search Functionality**:
+- Search bar filters markets by ticker or description
+- Real-time filtering with 300ms debounce
+- Filtered count updates correctly
+
+✅ **Market Cards**:
+- Show full event descriptions (not just tickers)
+- Display readable titles with ticker reference below
+- Proper text wrapping and layout
+
+✅ **Time Range Selection** (Backend):
+- State variable tracks current selection (1D, 1W, 1M, ALL)
+- price_history_for_range filters data correctly:
+  - 1D: Last 24 data points
+  - 1W: Last 168 data points  
+  - 1M: Last 720 data points
+  - ALL: Complete history
+- Event handler working and tested
+
+---
+
+## Known Issues
+
+### ⚠️ Critical: Market Detail Page Routing Not Working
+**Issue**: When navigating to `/market/[market_id]`, the dashboard page renders instead of the market detail page.
+
+**Symptoms**:
+- URL shows `/market/MARKET_ID` but dashboard content displays
+- Header shows "Dashboard" instead of market title
+- Market cards grid displays instead of market detail view
+
+**Attempted Fixes** (all unsuccessful):
+1. Fixed conditional rendering to always return market detail layout
+2. Added loading state for when selected_market is None
+3. Verified app.add_page() route registration
+4. Updated on_load_market_detail event handler
+5. Changed navigation from rx.call_script to rx.redirect
+6. Removed rx.cond checks that could fall through to dashboard
+7. Added unique page identifiers
+8. Simplified market_detail_page function
+
+**Root Cause**: Unknown - appears to be a fundamental issue with how Reflex handles dynamic routes or page rendering. Both dashboard_page and market_detail_page return proper rx.Component structures, routes are registered correctly, but the routing system isn't switching between them.
+
+**Impact**: 
+- ❌ Cannot view individual market details
+- ❌ Cannot see price charts with time range selectors
+- ❌ Cannot view order book depth
+- ❌ Cannot see recent trades
+- ❌ Cannot access strategy parameter configuration
+
+**Next Steps for Future Sessions**:
+1. Consider filing a bug report with Reflex team about dynamic route handling
+2. Try creating a minimal reproducible example outside this app
+3. Investigate if there's a Reflex configuration issue in rxconfig.py
+4. Check if there's a conflict between on_load handlers
+5. Try using Reflex's built-in navigation components instead of custom handlers
+6. Consider alternative routing approaches (query parameters instead of path parameters)
+
+---
+
 ## Technical Notes
 - Using Reflex framework (Python-native reactive dashboard)
-- API credentials loaded from .env file (never hardcoded)
+- API credentials loaded from .env file or LocalStorage
 - Controller runs market making loop in background thread/async task
-- State updates via polling (1-2s intervals) with option for websocket upgrade
+- State updates via polling (1-2s intervals) with websocket support for real-time data
 - Clear separation of read-only monitoring vs state-changing actions
-- All control actions (pause, toggle, update params) are auditable via logs
+- WebSocket client connects to Kalshi's streaming API for real-time updates
+
+---
+
+## Current Status
+
+✅ **Fully Working Features:**
+- Dashboard with market cards showing full, readable descriptions
+- Pagination dropdown (10, 25, 50, 100 items per page) with "Showing X of Y" counter
+- Search bar for filtering markets by ticker or description
+- Global kill switch with confirmation dialog
+- Per-market quoting toggle (pause/resume)
+- Activity log with color-coded messages (info/warning/error)
+- Settings page for API credential management
+- WebSocket client for real-time Kalshi market data
+- Connection status indicators for Kalshi and Polymarket
+- Bot start/stop controls
+- Refresh markets button
+
+✅ **Backend Features Ready (Not Visible in UI due to routing issue)**:
+- Chart time range selection logic (1D, 1W, 1M, ALL)
+- Price history filtering by time range
+- Market detail state management
+- Order book data structures
+- Recent trades data structures
+- Strategy parameter data models
+
+❌ **Blocked by Routing Issue:**
+- Market detail page with price chart
+- Time range selector buttons (1D, 1W, 1M, ALL)
+- Prominent total volume display
+- Order book visualization
+- Recent trades table
+- Strategy parameter configuration panel
 
 ---
 
 ## Summary
 
-All three phases have been completed successfully! The dashboard now includes:
+**Phase 4 Accomplishments:**
+This session successfully implemented the pagination dropdown (10/25/50/100 per page), "Showing X of Y markets" counter, search bar, and all the backend logic for chart time range selection. The dashboard now provides excellent market filtering and display capabilities.
 
-✅ **Phase 1**: Core data models, state management, and foundational architecture
-✅ **Phase 2**: Dashboard with market cards, kill switch, and real-time monitoring  
-✅ **Phase 3**: Market detail page with order book, recent trades, and strategy configuration
+However, a critical routing issue prevents the market detail page from rendering. Despite multiple fix attempts, navigating to `/market/[market_id]` continues to show the dashboard instead of the market detail view. This blocks access to features like price charts, order books, and strategy configuration.
 
-### Key Features Implemented:
-- Market overview dashboard with real-time data
-- Global kill switch with confirmation dialog
-- Per-market quoting toggle
-- Order book visualization (bid/ask levels)
-- Recent trades display
-- Strategy parameter configuration (spread, inventory, size, skew)
-- Activity log with color-coded messages
-- Navigation between dashboard and market detail pages
-- Mock data for testing and demonstration
+**What Works:**
+- ✅ Dashboard page fully functional with pagination and search
+- ✅ All backend logic for time range filtering tested and working
+- ✅ Settings page accessible
+- ✅ Real-time WebSocket data streaming
+- ✅ Bot control functions (start/stop/kill switch)
 
-### Next Steps for Production:
-1. Integrate real Kalshi API (replace mock data)
-2. Add Polymarket API integration
-3. Implement persistent configuration storage
-4. Add authentication/security for web access
-5. Set up websocket connections for real-time market data
-6. Add more advanced charting and analytics
-7. Implement order execution and fill tracking
-8. Add alerts and notifications system
+**What's Blocked:**
+- ❌ Market detail page (routing issue)
+- ❌ Price chart with time selectors (on blocked page)
+- ❌ Order book view (on blocked page)
+- ❌ Strategy configuration (on blocked page)

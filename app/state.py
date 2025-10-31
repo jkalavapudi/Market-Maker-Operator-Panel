@@ -1,7 +1,7 @@
 import reflex as rx
 import asyncio
 from typing import Literal
-from app.models import Market, OrderBookLevel, TradeFill, StrategyParams
+from app.models import Market, OrderBookLevel, TradeFill, StrategyParams, PriceDataPoint
 
 
 class BotState(rx.State):
@@ -18,19 +18,36 @@ class BotState(rx.State):
     log_messages: list[dict[str, str]] = []
     show_kill_switch_dialog: bool = False
     search_query: str = ""
+    items_per_page: int = 10
+    chart_time_range: str = "1D"
 
     @rx.var
     def active_markets(self) -> list[Market]:
         """Returns a list of all active markets, filtered by search query."""
+        markets_list = list(self.markets.values())
+        if self.search_query:
+            search_lower = self.search_query.lower()
+            markets_list = [
+                market
+                for market in markets_list
+                if search_lower in market["ticker"].lower()
+                or search_lower in market["description"].lower()
+            ]
+        return markets_list[: self.items_per_page]
+
+    @rx.var
+    def filtered_markets_count(self) -> int:
         if not self.search_query:
-            return list(self.markets.values())
+            return len(self.markets)
         search_lower = self.search_query.lower()
-        return [
-            market
-            for market in self.markets.values()
-            if search_lower in market["ticker"].lower()
-            or search_lower in market["description"].lower()
-        ]
+        return len(
+            [
+                market
+                for market in self.markets.values()
+                if search_lower in market["ticker"].lower()
+                or search_lower in market["description"].lower()
+            ]
+        )
 
     @rx.var
     def selected_market(self) -> Market | None:
@@ -38,6 +55,28 @@ class BotState(rx.State):
         if self.active_market_id and self.active_market_id in self.markets:
             return self.markets[self.active_market_id]
         return None
+
+    @rx.var
+    def price_history_for_range(self) -> list[PriceDataPoint]:
+        if not self.selected_market:
+            return []
+        history = self.selected_market.get("price_history", [])
+        if self.chart_time_range == "1D":
+            return history[-24:]
+        elif self.chart_time_range == "1W":
+            return history[-168:]
+        elif self.chart_time_range == "1M":
+            return history[-720:]
+        return history
+
+    @rx.event
+    def set_chart_time_range(self, time_range: str):
+        self.chart_time_range = time_range
+
+    @rx.event
+    def set_items_per_page(self, count: str):
+        self.items_per_page = int(count)
+        yield BotState.fetch_markets
 
     @rx.event
     def save_credentials(self):
@@ -113,20 +152,22 @@ class BotState(rx.State):
             if not self.markets:
                 yield BotState.fetch_markets
 
-    @rx.event(background=True)
+    @rx.event
     async def on_load_market_detail(self):
         """Ensure market data is loaded when navigating to detail page."""
-        from app.kalshi_api import get_markets
+        market_id = self.router.page.params.get("market_id")
+        if not market_id:
+            return
+        if not self.markets or market_id not in self.markets:
+            return BotState.fetch_markets_and_set_active(market_id)
+        else:
+            self.active_market_id = market_id
 
-        async with self:
-            if not self.markets:
-                yield BotState.fetch_markets
-        async with self:
-            market_id = self.router.page.params.get("market_id")
-            if market_id and market_id in self.markets:
-                self.active_market_id = market_id
-            elif not self.active_market_id and self.markets:
-                self.active_market_id = list(self.markets.keys())[0]
+    @rx.event
+    def fetch_markets_and_set_active(self, market_id: str):
+        """A chained event to fetch markets and then set the active one."""
+        self.active_market_id = market_id
+        return BotState.fetch_markets
 
     @rx.event(background=True)
     async def poll_market_data(self):
@@ -173,7 +214,10 @@ class BotState(rx.State):
             api_key = self.kalshi_api_key
             series_ticker = self.search_query if len(self.search_query) > 2 else None
         response_data = await get_markets(
-            api_key, status="open", limit=500, series_ticker=series_ticker
+            api_key,
+            status="open",
+            limit=self.items_per_page,
+            series_ticker=series_ticker,
         )
         async with self:
             if "error" in response_data:
@@ -195,6 +239,13 @@ class BotState(rx.State):
             }
             for market_data in raw_markets:
                 market_id = market_data["ticker"]
+                price_history = [
+                    PriceDataPoint(time="10:00", price=0.5),
+                    PriceDataPoint(time="10:05", price=0.52),
+                    PriceDataPoint(time="10:10", price=0.51),
+                    PriceDataPoint(time="10:15", price=0.53),
+                    PriceDataPoint(time="10:20", price=0.55),
+                ]
                 if market_id not in self.markets:
                     self.markets[market_id] = Market(
                         market_id=market_id,
@@ -209,6 +260,8 @@ class BotState(rx.State):
                         inventory=0,
                         unrealized_pnl=0.0,
                         quoting_active=False,
+                        total_volume=market_data.get("volume_total", 0),
+                        price_history=price_history,
                         strategy_params=strategy_template.copy(),
                         order_book=[],
                         recent_trades=[],

@@ -36,10 +36,22 @@ def dashboard_header() -> rx.Component:
             ),
             class_name="flex flex-col items-start w-full",
         ),
-        rx.el.input(
-            placeholder="Search markets (e.g., INFL)",
-            on_change=BotState.set_search_query.debounce(300),
-            class_name="w-full max-w-sm px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500",
+        rx.el.div(
+            rx.el.input(
+                placeholder="Search markets (e.g., INFL)",
+                on_change=BotState.set_search_query.debounce(300),
+                class_name="w-full max-w-xs px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500",
+            ),
+            rx.el.select(
+                rx.foreach(
+                    ["10", "25", "50", "100"],
+                    lambda count: rx.el.option(count, value=count),
+                ),
+                value=BotState.items_per_page.to_string(),
+                on_change=BotState.set_items_per_page,
+                class_name="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500",
+            ),
+            class_name="flex items-center gap-4",
         ),
         rx.el.div(
             rx.el.button(
@@ -80,6 +92,17 @@ def dashboard_content() -> rx.Component:
     return rx.el.main(
         dashboard_header(),
         rx.el.div(
+            rx.el.div(
+                rx.el.p(
+                    "Showing ",
+                    rx.el.b(BotState.active_markets.length()),
+                    " of ",
+                    rx.el.b(BotState.filtered_markets_count),
+                    " markets.",
+                    class_name="text-sm text-gray-600 mb-4",
+                ),
+                class_name="px-4 md:px-0",
+            ),
             rx.cond(
                 BotState.active_markets.length() > 0,
                 rx.el.div(
