@@ -21,10 +21,14 @@ def quote_display(side: str, price: rx.Var, size: rx.Var) -> rx.Component:
         rx.el.span(f"My {side}", class_name=f"text-sm font-medium {color_class}"),
         rx.el.div(
             rx.el.span(
-                f"{price.to_string()}", class_name="font-mono text-base font-semibold"
+                rx.cond(price.is_none(), "-", price.to_string()),
+                class_name="font-mono text-base font-semibold",
             ),
             rx.el.span(" x ", class_name="text-gray-400 mx-1"),
-            rx.el.span(size, class_name="font-mono text-base font-semibold"),
+            rx.el.span(
+                rx.cond(size.is_none(), "-", size.to_string()),
+                class_name="font-mono text-base font-semibold",
+            ),
             class_name="flex items-center text-gray-800",
         ),
         class_name="flex flex-col items-center p-2 rounded-lg",

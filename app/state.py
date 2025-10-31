@@ -6,7 +6,6 @@ from app.models import Market, OrderBookLevel, TradeFill, StrategyParams
 
 class BotState(rx.State):
     is_bot_running: bool = False
-    use_mock_data: bool = True
     global_kill_switch_active: bool = False
     connection_status: dict[
         str, Literal["connected", "unauthorized", "failed", "disconnected"]
@@ -30,21 +29,6 @@ class BotState(rx.State):
         if self.active_market_id and self.active_market_id in self.markets:
             return self.markets[self.active_market_id]
         return None
-
-    @rx.event
-    def toggle_data_source(self):
-        self.use_mock_data = not self.use_mock_data
-        if not self.use_mock_data and (
-            not self.kalshi_api_key or not self.kalshi_secret_key
-        ):
-            self.use_mock_data = True
-            rx.toast.error(
-                "Kalshi API credentials are not set. Cannot switch to live data.",
-                duration=5000,
-            )
-            return
-        status = "mock data" if self.use_mock_data else "live API"
-        self._add_log("info", f"Data source switched to {status}.")
 
     @rx.event
     def save_credentials(self):
@@ -114,58 +98,41 @@ class BotState(rx.State):
         self.active_market_id = market_id
 
     @rx.event(background=True)
-    async def on_load_market_detail(self):
-        """Ensure market data is loaded when navigating to detail page."""
+    async def on_load_dashboard(self):
+        """Fetches markets when the dashboard loads."""
         async with self:
             if not self.markets:
-                self._initialize_mock_data()
+                yield BotState.fetch_markets
+
+    @rx.event(background=True)
+    async def on_load_market_detail(self):
+        """Ensure market data is loaded when navigating to detail page."""
+        from app.kalshi_api import get_markets
+
+        async with self:
+            if not self.markets:
+                yield BotState.fetch_markets
         async with self:
             market_id = self.router.page.params.get("market_id")
             if market_id and market_id in self.markets:
                 self.active_market_id = market_id
-            elif not self.active_market_id:
-                if self.markets:
-                    self.active_market_id = list(self.markets.keys())[0]
+            elif not self.active_market_id and self.markets:
+                self.active_market_id = list(self.markets.keys())[0]
 
     @rx.event(background=True)
     async def poll_market_data(self):
         """Periodically polls the bot controller for fresh market data."""
         async with self:
-            if self.use_mock_data:
-                if not self.markets:
-                    self._initialize_mock_data()
-            else:
-                self._add_log("warning", "Live API polling not implemented.")
+            if not self.kalshi_api_key:
+                self._add_log(
+                    "error",
+                    "Bot stopped. Kalshi API key not set. Please add it on the settings page.",
+                )
                 self.is_bot_running = False
                 return
-        await asyncio.sleep(2)
-        async with self:
-            if self.use_mock_data and "BIDEN" in self.markets:
-                market = self.markets["BIDEN"]
-                market["best_bid"] = (
-                    round(market["best_bid"] + 0.01, 2)
-                    if market["best_bid"] < 0.98
-                    else 0.5
-                )
-                market["best_ask"] = (
-                    round(market["best_ask"] + 0.01, 2)
-                    if market["best_ask"] < 0.99
-                    else 0.52
-                )
-                market["inventory"] += 10 if market["best_bid"] > 0.55 else -5
-                market["unrealized_pnl"] += (market["best_bid"] - 0.5) * 10
-                if self.is_bot_running and market["quoting_active"]:
-                    new_trade = TradeFill(
-                        timestamp="12:00:01",
-                        side="buy",
-                        price=market["best_bid"],
-                        size=10,
-                        market_id="BIDEN",
-                    )
-                    market["recent_trades"].insert(0, new_trade)
-                    if len(market["recent_trades"]) > 10:
-                        market["recent_trades"].pop()
-        return BotState.poll_market_data
+        while self.is_bot_running:
+            await self.fetch_markets()
+            await asyncio.sleep(5)
 
     @rx.event
     def start_bot(self):
@@ -189,69 +156,57 @@ class BotState(rx.State):
         if len(self.log_messages) > 100:
             self.log_messages.pop()
 
-    def _initialize_mock_data(self):
-        """Sets up initial mock data for demonstration."""
-        self._add_log("info", "Initializing with mock market data.")
-        strategy_template = {
-            "target_spread_bps": 200,
-            "max_inventory": 1000,
-            "base_quote_size": 100,
-            "skew": 0.5,
-            "enabled": True,
-        }
-        self.markets = {
-            "BIDEN": Market(
-                market_id="BIDEN",
-                ticker="BIDEN.WINS.2024",
-                description="Will Joe Biden win the 2024 presidential election?",
-                best_bid=0.5,
-                best_ask=0.52,
-                my_bid_price=0.49,
-                my_bid_size=100,
-                my_ask_price=0.53,
-                my_ask_size=100,
-                inventory=50,
-                unrealized_pnl=25.5,
-                quoting_active=True,
-                strategy_params=strategy_template.copy(),
-                order_book=[
-                    {"side": "ask", "price": 0.53, "size": 500},
-                    {"side": "ask", "price": 0.52, "size": 1200},
-                    {"side": "bid", "price": 0.5, "size": 800},
-                    {"side": "bid", "price": 0.49, "size": 1500},
-                ],
-                recent_trades=[
-                    {
-                        "timestamp": "11:59:30",
-                        "side": "sell",
-                        "price": 0.51,
-                        "size": 50,
-                        "market_id": "BIDEN",
-                    }
-                ],
-            ),
-            "TRUMP": Market(
-                market_id="TRUMP",
-                ticker="TRUMP.WINS.2024",
-                description="Will Donald Trump win the 2024 presidential election?",
-                best_bid=0.48,
-                best_ask=0.5,
-                my_bid_price=0.47,
-                my_bid_size=100,
-                my_ask_price=0.51,
-                my_ask_size=100,
-                inventory=-20,
-                unrealized_pnl=-10.2,
-                quoting_active=False,
-                strategy_params=strategy_template.copy(),
-                order_book=[
-                    {"side": "ask", "price": 0.51, "size": 900},
-                    {"side": "ask", "price": 0.5, "size": 1100},
-                    {"side": "bid", "price": 0.48, "size": 600},
-                    {"side": "bid", "price": 0.47, "size": 1300},
-                ],
-                recent_trades=[],
-            ),
-        }
-        if not self.active_market_id:
-            self.active_market_id = "BIDEN"
+    @rx.event(background=True)
+    async def fetch_markets(self):
+        from app.kalshi_api import get_markets
+
+        async with self:
+            api_key = self.kalshi_api_key
+        response_data = await get_markets(api_key)
+        async with self:
+            if "error" in response_data:
+                self._add_log("error", f"API Error: {response_data['error']}")
+                self.connection_status["kalshi"] = "failed"
+                return
+            if api_key:
+                self.connection_status["kalshi"] = "connected"
+            raw_markets = response_data.get("markets", [])
+            self._add_log("info", f"Fetched {len(raw_markets)} markets from Kalshi.")
+            if raw_markets:
+                self.markets.clear()
+            strategy_template = {
+                "target_spread_bps": 200,
+                "max_inventory": 1000,
+                "base_quote_size": 100,
+                "skew": 0.5,
+                "enabled": False,
+            }
+            for market_data in raw_markets:
+                market_id = market_data["ticker"]
+                if market_id not in self.markets:
+                    self.markets[market_id] = Market(
+                        market_id=market_id,
+                        ticker=market_data["ticker"],
+                        description=market_data["title"],
+                        best_bid=market_data.get("yes_bid", 0) / 100.0,
+                        best_ask=market_data.get("yes_ask", 0) / 100.0,
+                        my_bid_price=None,
+                        my_bid_size=None,
+                        my_ask_price=None,
+                        my_ask_size=None,
+                        inventory=0,
+                        unrealized_pnl=0.0,
+                        quoting_active=False,
+                        strategy_params=strategy_template.copy(),
+                        order_book=[],
+                        recent_trades=[],
+                    )
+                else:
+                    self.markets[market_id]["best_bid"] = (
+                        market_data.get("yes_bid", 0) / 100.0
+                    )
+                    self.markets[market_id]["best_ask"] = (
+                        market_data.get("yes_ask", 0) / 100.0
+                    )
+            if not self.active_market_id and self.markets:
+                self.active_market_id = list(self.markets.keys())[0]

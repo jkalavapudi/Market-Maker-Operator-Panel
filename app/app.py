@@ -16,7 +16,7 @@ app = rx.App(
 )
 from app.state import BotState
 
-app.add_page(dashboard_page, route="/")
+app.add_page(dashboard_page, route="/", on_load=BotState.on_load_dashboard)
 app.add_page(
     market_detail_page,
     route="/market/[market_id]",
