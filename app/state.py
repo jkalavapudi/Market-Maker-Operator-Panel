@@ -171,8 +171,9 @@ class BotState(rx.State):
 
         async with self:
             api_key = self.kalshi_api_key
+            series_ticker = self.search_query if len(self.search_query) > 2 else None
         response_data = await get_markets(
-            api_key, status="open", limit=100, series_ticker="NCAAB"
+            api_key, status="open", limit=20, series_ticker=series_ticker
         )
         async with self:
             if "error" in response_data:

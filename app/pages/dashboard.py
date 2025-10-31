@@ -37,8 +37,8 @@ def dashboard_header() -> rx.Component:
             class_name="flex flex-col items-start w-full",
         ),
         rx.el.input(
-            placeholder="Search markets (e.g., NCAAB)",
-            on_change=BotState.set_search_query,
+            placeholder="Search markets (e.g., INFL)",
+            on_change=BotState.set_search_query.debounce(300),
             class_name="w-full max-w-sm px-3 py-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500",
         ),
         rx.el.div(
